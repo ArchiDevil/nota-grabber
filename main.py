@@ -13,38 +13,35 @@ from grabber import signin, grab_page
 def run_tasks(tasks: list[Callable]):
     while tasks:
         time.sleep(0.25)  # wait 250 ms to avoid spamming
-        print(f'Tasks left: {len(tasks)}')
+        print(f'Tasks left: {"*"*len(tasks)}')
         task = tasks.pop()
         task()
 
 
 def task_parse_page(tasks: list[Callable],
                     sess: requests.Session,
-                    page_link: str):
-    # print(f'Parsing {page_link}')
+                    page_link: str,
+                    chapter_path: Path):
     page = grab_page(sess, page_link)
     doc = [{
         'original': segment['original'],
         'translation': segment['translation'],
     } for segment in parse_segments(page)]
-    book_id = page_link.split('/')[-2]
-    chapter_id = page_link.split('/')[-1].split('?')[0]
     page_id = page_link.split('=')[-1]
-    output_path = Path('.') / 'books' / book_id / f'{chapter_id}'
-    output_path.mkdir(parents=True, exist_ok=True)
-    json_path = output_path / f'{page_id}.json'
+    json_path = chapter_path / f'{page_id}.json'
     with open(json_path, 'w', encoding='utf-8') as fp:
         json.dump(doc, fp, ensure_ascii=False, indent=2)
 
 
 def task_parse_chapter(tasks: list[Callable],
                        sess: requests.Session,
-                       chapter_link: str):
-    # print(f'Parsing {chapter_link}')
+                       chapter_link: str,
+                       chapter_path: Path):
     page = grab_page(sess, chapter_link)
     for page in parse_pages(page):
         page_link = chapter_link + page['href']
-        tasks.append(lambda pl=page_link: task_parse_page(tasks, sess, pl))
+        tasks.append(lambda pl=page_link,
+                     cp=chapter_path: task_parse_page(tasks, sess, pl, cp))
 
 
 def task_parse_book(tasks: list[Callable],
@@ -54,14 +51,19 @@ def task_parse_book(tasks: list[Callable],
     sess = requests.Session()
     signin(sess, 'http://notabenoid.org/', login, password)
 
-    book_dir = Path('.') / 'books' / book_id
-    book_dir.mkdir(parents=True, exist_ok=True)
+    book_path = Path('.') / 'books' / book_id
+    book_path.mkdir(parents=True, exist_ok=True)
 
     page = grab_page(sess, f'http://notabenoid.org/book/{book_id}')
     for chapter in parse_chapters(page):
+        chapter_id = chapter['href'].split('/')[-1]
+        chapter_path = book_path / chapter_id
+        chapter_path.mkdir(parents=True, exist_ok=True)
+
         chapter_link = 'http://notabenoid.org' + chapter['href']
-        tasks.append(
-            lambda cl=chapter_link: task_parse_chapter(tasks, sess, cl))
+        tasks.append(lambda cl=chapter_link,
+                     cp=chapter_path: task_parse_chapter(tasks, sess,
+                                                         cl, cp))
 
 
 def main():
