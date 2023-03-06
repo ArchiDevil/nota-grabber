@@ -6,8 +6,13 @@ from typing import Callable
 
 import requests
 
-from html_parser import parse_chapters, parse_pages, parse_segments
+from html_parser import parse_chapters, parse_pages, parse_segments, parse_book
 from grabber import signin, grab_page
+
+
+def file_filepath(text: str) -> str:
+    text = text.replace('/', '_').replace(':', '_').replace('?', '_')
+    return text.replace('!', '_').replace('“', '').replace('"', '')
 
 
 def run_tasks(tasks: list[Callable]):
@@ -51,13 +56,16 @@ def task_parse_book(tasks: list[Callable],
     sess = requests.Session()
     signin(sess, 'http://notabenoid.org/', login, password)
 
-    book_path = Path('.') / 'books' / book_id
+    page = grab_page(sess, f'http://notabenoid.org/book/{book_id}')
+    book_name = file_filepath(parse_book(page)['name'])
+
+    book_path = Path('.') / 'books' / f'{book_id} - {book_name}'
     book_path.mkdir(parents=True, exist_ok=True)
 
-    page = grab_page(sess, f'http://notabenoid.org/book/{book_id}')
     for chapter in parse_chapters(page):
         chapter_id = chapter['href'].split('/')[-1]
-        chapter_path = book_path / chapter_id
+        chapter_name = file_filepath(chapter['text'])
+        chapter_path = book_path / f'{chapter_id} - {chapter_name}'
         chapter_path.mkdir(parents=True, exist_ok=True)
 
         chapter_link = 'http://notabenoid.org' + chapter['href']

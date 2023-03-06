@@ -50,3 +50,14 @@ def parse_segments(html: str):
             'original': o.find('p', class_='text').text,
             'translation': t.find('p', class_='text').text
         } for o, t in zip(originals, translations)]
+
+
+TBookKeys = Literal['name']
+
+def parse_book(html: str) -> dict[TBookKeys, str]:
+    soup = BeautifulSoup(html, 'html.parser')
+    h1 = soup.find('h1')
+    assert h1 and isinstance(h1, bs4.Tag)
+    return {
+        'name': h1.text
+    }
